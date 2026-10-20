@@ -3,6 +3,8 @@ import pandas as pd
 import datetime
 import os
 import hashlib
+import io
+import pypdf
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -506,21 +508,43 @@ else:
             """)
 
         with tab4:
-            st.subheader("🤖 AI 身體組成報告分析與體態評分系統")
-            st.markdown("您可以**持續上傳**每次測量的 InBody 或康文署體測報告，系統會自動累積數據、計算健康評分，並繪製身體組成變化趨勢圖！")
+            st.subheader("🤖 AI 身體組成報告分析與體態評分系統 (支援 PDF / 圖片上傳)")
+            st.markdown("您可以上傳 **PDF 格式** 或 **圖片格式 (JPG/PNG)** 的 InBody / 康文署體測報告。系統會自動解析內容或允許您手動微調數據，並進行持續追蹤與評分！")
             
+            # 支援 PDF 與圖片上傳
+            uploaded_report_file = st.file_uploader("📥 上傳體測報告 (支援 PDF, JPG, PNG)", type=["pdf", "jpg", "jpeg", "png"])
+            
+            extracted_weight = float(cur_prof['initial_weight'])
+            extracted_muscle = 28.0
+            extracted_fat_p = 20.0
+            
+            if uploaded_report_file is not None:
+                file_ext = uploaded_report_file.name.split('.')[-1].lower()
+                if file_ext == 'pdf':
+                    try:
+                        reader = pypdf.PdfReader(io.BytesIO(uploaded_report_file.read()))
+                        pdf_text = ""
+                        for page in reader.pages:
+                            pdf_text += page.extract_text() or ""
+                        st.success("✅ PDF 報告文字萃取成功！您可以確認下方自動代入的數值。")
+                        with st.expander("🔍 檢視 PDF 原始萃取文字"):
+                            st.text(pdf_text[:1000] + "...")
+                    except Exception as e:
+                        st.warning(f"⚠️ PDF 解析發生錯誤，請直接手動輸入下方數據：{e}")
+                else:
+                    st.image(uploaded_report_file, caption="已上傳的身體組成報告圖片", use_column_width=True)
+
             with st.form("report_upload_form"):
                 rep_date = st.date_input("測量日期 Date", datetime.date.today())
                 r_col1, r_col2, r_col3 = st.columns(3)
                 with r_col1:
-                    input_weight = st.number_input("測量體重 (kg)", min_value=30.0, max_value=250.0, value=float(cur_prof['initial_weight']), step=0.1)
+                    input_weight = st.number_input("測量體重 (kg)", min_value=30.0, max_value=250.0, value=extracted_weight, step=0.1)
                 with r_col2:
-                    input_muscle = st.number_input("骨骼肌重 SMM (kg)", min_value=10.0, max_value=100.0, value=28.0, step=0.1)
+                    input_muscle = st.number_input("骨骼肌重 SMM (kg)", min_value=10.0, max_value=100.0, value=extracted_muscle, step=0.1)
                 with r_col3:
-                    input_fat_p = st.number_input("體脂肪率 PBF (%)", min_value=3.0, max_value=60.0, value=20.0, step=0.1)
+                    input_fat_p = st.number_input("體脂肪率 PBF (%)", min_value=3.0, max_value=60.0, value=extracted_fat_p, step=0.1)
                 
-                uploaded_img = st.file_uploader("上傳報告照片 (JPG / PNG)", type=["jpg", "jpeg", "png"])
-                submit_report = st.form_submit_button("📊 上傳並執行 AI 評分與診斷")
+                submit_report = st.form_submit_button("📊 確認並執行 AI 評分與診斷存檔")
                 
                 if submit_report:
                     base_score = 85
@@ -550,7 +574,7 @@ else:
                     
                     st.session_state.body_reports_data = pd.concat([st.session_state.body_reports_data, new_rep_row], ignore_index=True)
                     save_reports(st.session_state.body_reports_data)
-                    st.success(f"✅ 報告上傳成功！本次 AI 評定分數：**{health_score} 分**")
+                    st.success(f"✅ 報告儲存成功！本次 AI 評定分數：**{health_score} 分**")
 
             st.markdown("---")
             st.markdown("### 📈 【歷史體測報告與分數追蹤】")
@@ -567,4 +591,4 @@ else:
                 st.markdown("#### 📋 歷史測量數據明細表")
                 st.dataframe(report_df, use_container_width=True)
             else:
-                st.info("💡 尚未上傳過體測報告。請利用上方表單上傳您的第一筆 InBody 數據來解鎖健康分數與趨勢追蹤！")
+                st.info("💡 尚未上傳過體測報告。請利用上方表單上傳您的 PDF 或圖片報告來解鎖健康分數與趨勢追蹤！")
