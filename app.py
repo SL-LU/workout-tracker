@@ -302,3 +302,79 @@ else:
                 ("第四組 (Set 4)", 60.0, 8),
                 ("第五組 (Set 5)", 0.0, 0),
                 ("第六組 (Set 6)", 0.0, 0)
+            ]
+            
+            set_data_input = []
+            total_volume = 0.0
+            
+            for set_name, default_w, default_r in sets_config:
+                cols = st.columns([2, 2, 2])
+                with cols[0]:
+                    st.markdown(f"**{set_name}**")
+                with cols[1]:
+                    w = st.number_input(f"{set_name} 重量(kg)", min_value=0.0, max_value=500.0, value=default_w, step=2.5, key=f"w_{set_name}")
+                with cols[2]:
+                    r = st.number_input(f"{set_name} 次數", min_value=0, max_value=200, value=default_r, step=1, key=f"r_{set_name}")
+                
+                if w > 0 and r > 0:
+                    total_volume += (w * r)
+                    set_data_input.append({
+                        "日期": date_val,
+                        "肌群分類": muscle_group,
+                        "動作名稱": exercise_name,
+                        "組別": set_name,
+                        "重量(kg)": w,
+                        "次數": r,
+                        "體重(kg)": body_weight,
+                        "消耗卡路里": 0,
+                        "心情指數": mood_val
+                    })
+            
+            estimated_cals = int(100 + (total_volume * 0.06))
+            st.success(f"🔥 **預估總訓練量**: {total_volume:.1f} kg ｜ **自動計算消耗卡路里**: ~ {estimated_cals} kcal")
+            
+            submitted = st.form_submit_button("➕ 批量儲存所有組數紀錄")
+            if submitted:
+                if set_data_input:
+                    for item in set_data_input:
+                        item["消耗卡路里"] = estimated_cals // len(set_data_input)
+                        
+                    new_df = pd.DataFrame(set_data_input)
+                    st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_df], ignore_index=True)
+                    save_data(st.session_state.workout_sets_data)
+                    st.sidebar.success(f"✅ 成功儲存 {len(set_data_input)} 組紀錄（自動計算消耗 {estimated_cals} kcal）！")
+                else:
+                    st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
+
+        tab1, tab2, tab3 = st.tabs(["📊 詳細圖表分析（互動式圖表）", "📋 所有組數歷史明細", "💡 個人檔案與說明"])
+
+        with tab1:
+            st.subheader("📈 詳細圖表分析 (Interactive Workout Charts)")
+            df = st.session_state.workout_sets_data.sort_values(by="日期")
+            
+            if not df.empty:
+                selected_mg_filter = st.selectbox("篩選顯示肌群 (Filter by Muscle Group)", ["全部顯示 (All)"] + list(EXERCISE_DICT.keys()))
+                if selected_mg_filter != "全部顯示 (All)":
+                    df_filtered = df[df["肌群分類"] == selected_mg_filter]
+                else:
+                    df_filtered = df
+                    
+                col_c1, col_c2 = st.columns(2)
+                
+                with col_c1:
+                    st.markdown("#### 1. 肌力提升趨勢圖 (折線圖)")
+                    if not df_filtered.empty:
+                        df_max_weight = df_filtered.groupby(["日期", "動作名稱"], as_index=False)["重量(kg)"].max()
+                        fig_line = px.line(df_max_weight, x="日期", y="重量(kg)", color="動作名稱", markers=True, title="各動作肌力/重量成長曲線")
+                        fig_line.update_layout(hovermode="x unified")
+                        st.plotly_chart(fig_line, use_container_width=True)
+                    else:
+                        st.info("此肌群尚無數據。")
+                        
+                with col_c2:
+                    st.markdown("#### 2. 體重與消耗卡路里雙軸圖 (Combo Chart)")
+                    df_daily = df.groupby("日期", as_index=False).agg({"體重(kg)": "mean", "消耗卡路里": "max"})
+                    fig_combo = go.Figure()
+                    fig_combo.add_trace(go.Scatter(x=df_daily['日期'], y=df_daily['體重(kg)'], name="體重 (kg)", mode='lines+markers', line=dict(color='firebrick', width=3)))
+                    fig_combo.add_trace(go.Bar(x=df_daily['日期'], y=df_daily['消耗卡路里'], name="每日消耗 (kcal)", opacity=0.4, yaxis='y2'))
+                    fig_combo.update_layout(yaxis=dict(title="體重 (kg)"), yaxis2=dict(title="消耗卡路里 (kcal)", overlaying='y', side='right'), hovermode="x unified")
