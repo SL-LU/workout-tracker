@@ -4,9 +4,15 @@ import datetime
 import os
 import hashlib
 import io
-import pypdf
 import plotly.express as px
 import plotly.graph_objects as go
+
+# 安全匯入 pypdf，避免未安裝時發生 ModuleNotFoundError
+try:
+    import pypdf
+    HAS_PYPDF = True
+except ImportError:
+    HAS_PYPDF = False
 
 # Set page configuration
 st.set_page_config(
@@ -509,9 +515,8 @@ else:
 
         with tab4:
             st.subheader("🤖 AI 身體組成報告分析與體態評分系統 (支援 PDF / 圖片上傳)")
-            st.markdown("您可以上傳 **PDF 格式** 或 **圖片格式 (JPG/PNG)** 的 InBody / 康文署體測報告。系統會自動解析內容或允許您手動微調數據，並進行持續追蹤與評分！")
+            st.markdown("您可以上傳 **PDF 檔案** 或 **圖片 (JPG/PNG)** 的 InBody / 康文署體測報告進行分析與長期追蹤。")
             
-            # 支援 PDF 與圖片上傳
             uploaded_report_file = st.file_uploader("📥 上傳體測報告 (支援 PDF, JPG, PNG)", type=["pdf", "jpg", "jpeg", "png"])
             
             extracted_weight = float(cur_prof['initial_weight'])
@@ -521,16 +526,17 @@ else:
             if uploaded_report_file is not None:
                 file_ext = uploaded_report_file.name.split('.')[-1].lower()
                 if file_ext == 'pdf':
-                    try:
-                        reader = pypdf.PdfReader(io.BytesIO(uploaded_report_file.read()))
-                        pdf_text = ""
-                        for page in reader.pages:
-                            pdf_text += page.extract_text() or ""
-                        st.success("✅ PDF 報告文字萃取成功！您可以確認下方自動代入的數值。")
-                        with st.expander("🔍 檢視 PDF 原始萃取文字"):
-                            st.text(pdf_text[:1000] + "...")
-                    except Exception as e:
-                        st.warning(f"⚠️ PDF 解析發生錯誤，請直接手動輸入下方數據：{e}")
+                    if HAS_PYPDF:
+                        try:
+                            reader = pypdf.PdfReader(io.BytesIO(uploaded_report_file.read()))
+                            pdf_text = ""
+                            for page in reader.pages:
+                                pdf_text += page.extract_text() or ""
+                            st.success("✅ PDF 報告上傳成功！您可以確認下方自動代入的數值。")
+                        except Exception as e:
+                            st.warning(f"⚠️ PDF 解析發生錯誤，請直接手動輸入下方數據：{e}")
+                    else:
+                        st.info("💡 提示：若需自動解析 PDF 內文，建議在您的 `requirements.txt` 檔案中加入 `pypdf`。目前您可以直接手動輸入下方數值進行評分與存檔！")
                 else:
                     st.image(uploaded_report_file, caption="已上傳的身體組成報告圖片", use_column_width=True)
 
