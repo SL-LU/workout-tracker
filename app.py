@@ -143,7 +143,6 @@ else:
             setup_submit = st.form_submit_button("🚀 儲存並開始我的健身之旅")
             
             if setup_submit:
-                # 更新 profile
                 if user_prof.empty:
                     new_p = pd.DataFrame([{
                         "username": st.session_state.username, "height": set_height, 
@@ -174,12 +173,12 @@ else:
 
         # 讀取當前用戶個人檔案
         cur_prof = profiles_df[profiles_df["username"] == st.session_state.username].iloc[0]
-        st.sidebar.markdown(f"### 👤 會員檔案卡片")
-        st.sidebar.info(f"**姓名**: {st.session_state.name}
-
-**身高**: {cur_prof['height']} cm
-
-**目標體重**: {cur_prof['target_weight']} kg")
+        st.sidebar.markdown("### 👤 會員檔案卡片")
+        st.sidebar.info(
+            f"**姓名**: {st.session_state.name}\n\n"
+            f"**身高**: {cur_prof['height']} cm\n\n"
+            f"**目標體重**: {cur_prof['target_weight']} kg"
+        )
 
         # 每個用戶專屬的訓練資料檔案
         DATA_FILE = f"workout_data_{st.session_state.username}.csv"
@@ -213,7 +212,6 @@ else:
         if 'workout_sets_data' not in st.session_state:
             st.session_state.workout_sets_data = load_data()
 
-        # 完整健身動作選單庫
         EXERCISE_DICT = {
             "胸部 (Chest)": [
                 "槓鈴平地臥推 (Barbell Bench Press)", "啞鈴平地臥推 (Dumbbell Bench Press)",
@@ -342,7 +340,7 @@ else:
                     save_data(st.session_state.workout_sets_data)
                     st.sidebar.success(f"✅ 成功儲存 {len(set_data_input)} 組紀錄並已自動存檔！")
                 else:
-                    st.sidebar.warning("⚠️ 請測試填寫一組有效的重量與次數。")
+                    st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
         # 主頁面分頁
         tab1, tab2, tab3 = st.tabs(["📊 詳細圖表分析（互動式圖表）", "📋 所有組數歷史明細", "💡 個人檔案與說明"])
