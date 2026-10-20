@@ -246,7 +246,8 @@ else:
             ]
         }
 
-        uploaded_file = st.sidebar.file_uploader("📥 匯入歷史 CSV 紀錄", type=["csv"])
+        # ----------------- 側邊欄：匯入 CSV 紀錄 -----------------
+        uploaded_file = st.sidebar.file_uploader("√ 📥 匯入歷史 CSV 紀錄", type=["csv"])
         if uploaded_file is not None:
             try:
                 imported_df = pd.read_csv(uploaded_file)
@@ -268,7 +269,7 @@ else:
 
         # ----------------- 側邊欄：有氧運動記錄 (Aerobic Activity) -----------------
         st.sidebar.markdown("---")
-        st.sidebar.header("🏃‍♂️ 記錄有氧運動 (Aerobic Activity)")
+        st.sidebar.header("√ 🏃‍♂️ 記錄有氧運動 (Aerobic Activity)")
         with st.sidebar.form("aerobic_form", clear_on_submit=False):
             aerobic_date = st.date_input("有氧日期 Date", datetime.date.today(), key="ae_date")
             aerobic_type = st.selectbox("有氧項目 Aerobic Type", [
@@ -288,7 +289,10 @@ else:
                 distance_km = st.number_input("距離 (DISTANCE 公里)", min_value=0.0, max_value=100.0, value=5.0, step=0.1)
             with ae_col2:
                 speed_resist = st.number_input("速度/阻力 (SPEED/RESIST)", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
-                cals_burned_ae = st.number_input("卡路里 (CALS kcal)", min_value=0, max_value=3000, value=300, step=10)
+                
+            # 自動計算有氧卡路里
+            calculated_ae_cals = int(duration_min * 9.5)
+            st.info(f"🔥 **自動計算有氧消耗**: ~ {calculated_ae_cals} kcal (依 {duration_min} 分鐘持續時間估算)")
                 
             ae_mood = st.selectbox("心情指數", ["很開心", "開心", "普通", "不開心"], key="ae_mood")
             
@@ -299,19 +303,19 @@ else:
                     "肌群分類": "有氧運動 (Cardio)",
                     "動作名稱": aerobic_type,
                     "組別": f"持續 {duration_min}分",
-                    "重量(kg)": distance_km,  # 距離 (km)
-                    "次數": int(speed_resist * 10),  # 速度/阻力
+                    "重量(kg)": distance_km,
+                    "次數": int(speed_resist * 10),
                     "體重(kg)": float(cur_prof['initial_weight']),
-                    "消耗卡路里": cals_burned_ae,
+                    "消耗卡路里": calculated_ae_cals,
                     "心情指數": ae_mood
                 }])
                 st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_ae_row], ignore_index=True)
                 save_data(st.session_state.workout_sets_data)
-                st.sidebar.success(f"✅ 成功儲存有氧紀錄：{aerobic_type} ({duration_min}分鐘, {distance_km}km)！")
+                st.sidebar.success(f"✅ 成功儲存有氧紀錄：{aerobic_type} ({duration_min}分鐘, ~{calculated_ae_cals} kcal)！")
 
         # ----------------- 側邊欄：重量訓練逐組輸入 -----------------
         st.sidebar.markdown("---")
-        st.sidebar.header("📝 逐組輸入重量訓練紀錄")
+        st.sidebar.header("√ 📝 逐組輸入重量訓練紀錄")
         with st.sidebar.form("multiset_form", clear_on_submit=False):
             date_val = st.date_input("日期 Date", datetime.date.today())
             
@@ -386,7 +390,7 @@ else:
                     st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
         # ----------------- 主畫面分頁 -----------------
-        tab1, tab2, tab3 = st.tabs(["📊 詳細圖表分析（互動式圖表）", "📋 所有組數歷史明細", "💡 個人檔案與說明"])
+        tab1, tab2, tab3 = st.tabs(["√ 📊 詳細圖表分析（互動式圖表）", "√ 📋 所有組數歷史明細", "√ 💡 個人檔案與說明"])
 
         with tab1:
             st.subheader("📈 詳細圖表分析 (Interactive Workout Charts)")
