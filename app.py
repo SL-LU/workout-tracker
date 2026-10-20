@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 # Set page configuration
 st.set_page_config(
-    page_title="專業多組重量訓練追蹤系統",
+    page_title="專業多組重量與有氧訓練追蹤系統",
     page_icon="🏋️‍♂️",
     layout="wide"
 )
@@ -123,7 +123,6 @@ else:
     if not user_prof.empty:
         is_setup_complete = bool(user_prof.iloc[0]["setup_complete"])
 
-    # 如果尚未完成首次設定，強制引導填寫基本資料
     if not is_setup_complete:
         st.title(f"👋 歡迎加入，{st.session_state.name}！")
         st.markdown("### 📋 首次登入設定：請填寫您的基本身體密碼以解鎖專屬健身分析")
@@ -156,7 +155,6 @@ else:
                 st.rerun()
                 
     else:
-        # 已完成設定，進入主畫面
         top_col1, top_col2 = st.columns([6, 1])
         with top_col1:
             st.title(f"🏋️‍♂️ 健身紀錄與進度追蹤平台 (歡迎, {st.session_state.name}!)")
@@ -245,11 +243,6 @@ else:
                 "棒式 / 平板支撐 (Plank)", "側棒式 (Side Plank)", "仰臥起坐 / 捲腹 (Crunch)",
                 "懸垂舉腿 (Hanging Leg Raise)", "俄羅斯轉體 (Russian Twist)",
                 "健腹輪 (Ab Wheel Rollout)", "仰臥抬腿 (Leg Raises)", "鳥狗式 (Bird-Dog)"
-            ],
-            "有氧運動 (Cardio)": [
-                "跑步機跑步 (Treadmill Running)", "室內固定式腳踏車 (Stationary Bike)",
-                "橢圓機 (Elliptical Trainer)", "划船機 (Rowing Machine)",
-                "階梯機 (Stair Climber)", "跳繩 (Jump Rope)", "高強度間歇訓練 HIIT"
             ]
         }
 
@@ -273,8 +266,52 @@ else:
             except Exception as e:
                 st.sidebar.error(f"解析失敗: {e}")
 
+        # ----------------- 側邊欄：有氧運動記錄 (Aerobic Activity) -----------------
         st.sidebar.markdown("---")
-        st.sidebar.header("📝 逐組輸入今日訓練紀錄")
+        st.sidebar.header("🏃‍♂️ 記錄有氧運動 (Aerobic Activity)")
+        with st.sidebar.form("aerobic_form", clear_on_submit=False):
+            aerobic_date = st.date_input("有氧日期 Date", datetime.date.today(), key="ae_date")
+            aerobic_type = st.selectbox("有氧項目 Aerobic Type", [
+                "跑步機跑步 (Treadmill Running)", 
+                "室內固定式腳踏車 (Stationary Bike)", 
+                "橢圓機 (Elliptical Trainer)", 
+                "划船機 (Rowing Machine)", 
+                "階梯機 (Stair Climber)", 
+                "戶外跑步 (Outdoor Running)", 
+                "游泳 (Swimming)",
+                "其他有氧 (Other Cardio)"
+            ], key="ae_type")
+            
+            ae_col1, ae_col2 = st.columns(2)
+            with ae_col1:
+                duration_min = st.number_input("持續時間 (DURATION 分鐘)", min_value=1, max_value=300, value=30, step=5)
+                distance_km = st.number_input("距離 (DISTANCE 公里)", min_value=0.0, max_value=100.0, value=5.0, step=0.1)
+            with ae_col2:
+                speed_resist = st.number_input("速度/阻力 (SPEED/RESIST)", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
+                cals_burned_ae = st.number_input("卡路里 (CALS kcal)", min_value=0, max_value=3000, value=300, step=10)
+                
+            ae_mood = st.selectbox("心情指數", ["很開心", "開心", "普通", "不開心"], key="ae_mood")
+            
+            ae_submitted = st.form_submit_button("🏃‍♂️ 儲存有氧運動記錄")
+            if ae_submitted:
+                new_ae_row = pd.DataFrame([{
+                    "日期": aerobic_date,
+                    "肌群分類": "有氧運動 (Cardio)",
+                    "動作名稱": aerobic_type,
+                    "組別": f"持續 {duration_min}分",
+                    "重量(kg)": distance_km,  # 距離 (km)
+                    "次數": int(speed_resist * 10),  # 速度/阻力
+                    "體重(kg)": float(cur_prof['initial_weight']),
+                    "消耗卡路里": cals_burned_ae,
+                    "心情指數": ae_mood
+                }])
+                st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_ae_row], ignore_index=True)
+                save_data(st.session_state.workout_sets_data)
+                st.sidebar.success(f"✅ 成功儲存有氧紀錄：{aerobic_type} ({duration_min}分鐘, {distance_km}km)！")
+
+        # ----------------- 側邊欄：重量訓練逐組輸入 -----------------
+        st.sidebar.markdown("---")
+        st.sidebar.header("📝 逐組輸入重量訓練紀錄")
         with st.sidebar.form("multiset_form", clear_on_submit=False):
             date_val = st.date_input("日期 Date", datetime.date.today())
             
@@ -335,7 +372,7 @@ else:
             estimated_cals = int(100 + (total_volume * 0.06))
             st.success(f"🔥 **預估總訓練量**: {total_volume:.1f} kg ｜ **自動計算消耗卡路里**: ~ {estimated_cals} kcal")
             
-            submitted = st.form_submit_button("➕ 批量儲存所有組數紀錄")
+            submitted = st.form_submit_button("➕ 批量儲存重量訓練紀錄")
             if submitted:
                 if set_data_input:
                     for item in set_data_input:
@@ -348,7 +385,7 @@ else:
                 else:
                     st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
-        # 建立分頁 (確保只有在主畫面時才會被定義並呼叫)
+        # ----------------- 主畫面分頁 -----------------
         tab1, tab2, tab3 = st.tabs(["📊 詳細圖表分析（互動式圖表）", "📋 所有組數歷史明細", "💡 個人檔案與說明"])
 
         with tab1:
@@ -356,7 +393,7 @@ else:
             df = st.session_state.workout_sets_data.sort_values(by="日期")
             
             if not df.empty:
-                selected_mg_filter = st.selectbox("篩選顯示肌群 (Filter by Muscle Group)", ["全部顯示 (All)"] + list(EXERCISE_DICT.keys()))
+                selected_mg_filter = st.selectbox("篩選顯示肌群 (Filter by Muscle Group)", ["全部顯示 (All)"] + list(EXERCISE_DICT.keys()) + ["有氧運動 (Cardio)"])
                 if selected_mg_filter != "全部顯示 (All)":
                     df_filtered = df[df["肌群分類"] == selected_mg_filter]
                 else:
@@ -372,7 +409,7 @@ else:
                         fig_line.update_layout(hovermode="x unified")
                         st.plotly_chart(fig_line, use_container_width=True)
                     else:
-                        st.info("此肌群尚無數據。")
+                        st.info("此篩選項目尚無數據。")
                         
                 with col_c2:
                     st.markdown("#### 2. 體重與消耗卡路里雙軸圖 (Combo Chart)")
