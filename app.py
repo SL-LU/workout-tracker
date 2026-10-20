@@ -224,7 +224,7 @@ else:
             "腿部 (Legs)": [
                 "槓鈴深蹲 (Barbell Squat)", "前蹲舉 (Front Squat)",
                 "保加利亞分腿蹲 (Bulgarian Split Squat)", "腿部推舉機 (Leg Press)",
-                "羅馬尼亞硬舉 (Romanian Deadlift)", "箱式深蹲 (BoxSquat)",
+                "羅馬尼亞硬舉 (Romanian Deadlift)", "箱式深蹲 (Box Squat)",
                 "腿屈伸機 (Leg Extension)", "俯臥腿彎舉 (Leg Curl)",
                 "坐姿提踵 (Seated Calf Raise)", "站姿提踵 (Standing Calf Raise)", "臀橋 / 臀推 (Hip Thrust)"
             ],
@@ -287,9 +287,8 @@ else:
             with c_b1:
                 body_weight = st.number_input("當日體重 (kg)", min_value=30.0, max_value=250.0, value=float(cur_prof['initial_weight']), step=0.1)
             with c_b2:
-                # 這裡移除手動輸入，改為動態或保留預設，底下會自動透過組數計算
                 st.markdown("**🔥 卡路里消耗 (Auto)**")
-                st.info("系統將根據下方各組重量與次數自動計算總消耗！")
+                st.info("系統將根據下方各組重量與次數自動計算！")
                 
             mood_val = st.selectbox("心情指數 / 訓練情緒", ["很開心", "開心", "普通", "不開心"])
             
@@ -303,124 +302,3 @@ else:
                 ("第四組 (Set 4)", 60.0, 8),
                 ("第五組 (Set 5)", 0.0, 0),
                 ("第六組 (Set 6)", 0.0, 0)
-            ]
-            
-            set_data_input = []
-            total_volume = 0.0
-            
-            for set_name, default_w, default_r in sets_config:
-                cols = st.columns([2, 2, 2])
-                with cols[0]:
-                    st.markdown(f"**{set_name}**")
-                with cols[1]:
-                    w = st.number_input(f"{set_name} 重量(kg)", min_value=0.0, max_value=500.0, value=default_w, step=2.5, key=f"w_{set_name}")
-                with cols[2]:
-                    r = st.number_input(f"{set_name} 次數", min_value=0, max_value=200, value=default_r, step=1, key=f"r_{set_name}")
-                
-                if w > 0 and r > 0:
-                    total_volume += (w * r)
-                    set_data_input.append({
-                        "日期": date_val,
-                        "肌群分類": muscle_group,
-                        "動作名稱": exercise_name,
-                        "組別": set_name,
-                        "重量(kg)": w,
-                        "次數": r,
-                        "體重(kg)": body_weight,
-                        "消耗卡路里": 0, # 稍後計算
-                        "心情指數": mood_val
-                    })
-            
-            # 自動計算卡路里：基礎消耗 (例如 100 kcal) + 總訓練量 (Volume * 0.05)
-            estimated_cals = int(100 + (total_volume * 0.06))
-            st.success(🔥 **預估總訓練量**: `{total_volume:.1f} kg` ｜ **自動計算消耗卡路里**: `~ {estimated_cals} kcal`)
-            
-            submitted = st.form_submit_button("➕ 批量儲存所有組數紀錄")
-            if submitted:
-                if set_data_input:
-                    # 將計算好的卡路里分攤到該次各組中
-                    for item in set_data_input:
-                        item["消耗卡路里"] = estimated_cals // len(set_data_input)
-                        
-                    new_df = pd.DataFrame(set_data_input)
-                    st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_df], ignore_index=True)
-                    save_data(st.session_state.workout_sets_data)
-                    st.sidebar.success(f"✅ 成功儲存 {len(set_data_input)} 組紀錄（自動計算消耗 {estimated_cals} kcal）！")
-                else:
-                    st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
-
-        tab1, tab2, tab3 = st.tabs(["📊 詳細圖表分析（互動式圖表）", "📋 所有組數歷史明細", "💡 個人檔案與說明"])
-
-        with tab1:
-            st.subheader("📈 詳細圖表分析 (Interactive Workout Charts)")
-            df = st.session_state.workout_sets_data.sort_values(by="日期")
-            
-            if not df.empty:
-                selected_mg_filter = st.selectbox("篩選顯示肌群 (Filter by Muscle Group)", ["全部顯示 (All)"] + list(EXERCISE_DICT.keys()))
-                if selected_mg_filter != "全部顯示 (All)":
-                    df_filtered = df[df["肌群分類"] == selected_mg_filter]
-                else:
-                    df_filtered = df
-                    
-                col_c1, col_c2 = st.columns(2)
-                
-                with col_c1:
-                    st.markdown("#### 1. 肌力提升趨勢圖 (折線圖)")
-                    if not df_filtered.empty:
-                        df_max_weight = df_filtered.groupby(["日期", "動作名稱"], as_index=False)["重量(kg)"].max()
-                        fig_line = px.line(df_max_weight, x="日期", y="重量(kg)", color="動作名稱", markers=True, title="各動作肌力/重量成長曲線")
-                        fig_line.update_layout(hovermode="x unified")
-                        st.plotly_chart(fig_line, use_container_width=True)
-                    else:
-                        st.info("此肌群尚無數據。")
-                        
-                with col_c2:
-                    st.markdown("#### 2. 體重與消耗卡路里雙軸圖 (Combo Chart)")
-                    df_daily = df.groupby("日期", as_index=False).agg({"體重(kg)": "mean", "消耗卡路里": "max"})
-                    fig_combo = go.Figure()
-                    fig_combo.add_trace(go.Scatter(x=df_daily['日期'], y=df_daily['體重(kg)'], name="體重 (kg)", mode='lines+markers', line=dict(color='firebrick', width=3)))
-                    fig_combo.add_trace(go.Bar(x=df_daily['日期'], y=df_daily['消耗卡路里'], name="每日消耗 (kcal)", opacity=0.4, yaxis='y2'))
-                    fig_combo.update_layout(yaxis=dict(title="體重 (kg)"), yaxis2=dict(title="消耗卡路里 (kcal)", overlaying='y', side='right'), hovermode="x unified")
-                    st.plotly_chart(fig_combo, use_container_width=True)
-                    
-                st.markdown("---")
-                col_c3, col_c4 = st.columns(2)
-                
-                with col_c3:
-                    st.markdown("#### 3. 動作次數 / 訓練量比例圖 (圓環圖)")
-                    df_action_count = df.groupby("動作名稱", as_index=False)["次數"].sum()
-                    fig_donut = px.pie(df_action_count, values="次數", names="動作名稱", hole=0.4, title="各動作完成總次數比例分佈")
-                    fig_donut.update_traces(textinfo='percent+label')
-                    st.plotly_chart(fig_donut, use_container_width=True)
-                    
-                with col_c4:
-                    st.markdown("#### 4. 訓練情緒統計圖 (Histogram)")
-                    if "心情指數" in df.columns:
-                        fig_hist = px.histogram(df, x="心情指數", color="心情指數", title="運動訓練情緒分佈統計", category_orders={"心情指數": ["很開心", "開心", "普通", "不開心"]})
-                        st.plotly_chart(fig_hist, use_container_width=True)
-                    else:
-                        st.info("尚無情緒紀錄。")
-            else:
-                st.info("尚無運動紀錄，請由左側輸入或上傳 CSV 檔案。")
-
-        with tab2:
-            st.subheader("📋 所有組數詳細紀錄表 (可線上修改，自動存檔)")
-            edited_df = st.data_editor(st.session_state.workout_sets_data, num_rows="dynamic", use_container_width=True)
-            if not edited_df.equals(st.session_state.workout_sets_data):
-                st.session_state.workout_sets_data = edited_df
-                save_data(edited_df)
-                st.success("🔄 資料已自動更新並存檔！")
-            
-            csv_data = st.session_state.workout_sets_data.to_csv(index=False).encode('utf-8-sig')
-            st.download_button(label="📥 下載個人歷史 CSV 紀錄", data=csv_data, file_name=f"workout_history_{st.session_state.username}.csv", mime="text/csv")
-
-        with tab3:
-            st.markdown(f"""
-            ### 💡 個人檔案與會員資訊
-            - **會員姓名**: {st.session_state.name}
-            - **會員帳號**: `{st.session_state.username}`
-            - **身高**: {cur_prof['height']} cm
-            - **目前體重**: {cur_prof['initial_weight']} kg
-            - **目標體重**: {cur_prof['target_weight']} kg
-            - **年齡 / 性別**: {cur_prof['age']} 歲 / {cur_prof['gender']}
-            """)
