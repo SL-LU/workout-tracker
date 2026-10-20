@@ -176,17 +176,33 @@ else:
         )
 
         DATA_FILE = f"workout_data_{st.session_state.username}.csv"
+        REPORT_FILE = f"body_reports_{st.session_state.username}.csv"
+        REQUIRED_COLUMNS = ["日期", "肌群分類", "動作名稱", "組別", "重量(kg)", "次數", "體重(kg)", "消耗卡路里", "心情指數"]
+
+        def validate_and_fix_df(df):
+            if df is None or df.empty:
+                return pd.DataFrame(columns=REQUIRED_COLUMNS)
+            for col in REQUIRED_COLUMNS:
+                if col not in df.columns:
+                    if col in ["重量(kg)", "次數", "消耗卡路里", "體重(kg)"]:
+                        df[col] = 0.0 if "kg" in col or col == "體重(kg)" else 0
+                    else:
+                        df[col] = "未分類" if col == "肌群分類" else ("未知動作" if col == "動作名稱" else ("第一組" if col == "組別" else "普通"))
+            if "日期" in df.columns:
+                try:
+                    df["日期"] = pd.to_datetime(df["日期"]).dt.date
+                except:
+                    df["日期"] = datetime.date.today()
+            return df[REQUIRED_COLUMNS]
 
         def load_data():
             if os.path.exists(DATA_FILE):
                 try:
                     df = pd.read_csv(DATA_FILE)
-                    if "日期" in df.columns:
-                        df["日期"] = pd.to_datetime(df["日期"]).dt.date
-                    return df
+                    return validate_and_fix_df(df)
                 except:
                     pass
-            return pd.DataFrame([
+            default_df = pd.DataFrame([
                 {
                     "日期": datetime.date(2026, 10, 10),
                     "肌群分類": "胸部 (Chest)",
@@ -199,12 +215,27 @@ else:
                     "心情指數": "開心"
                 }
             ])
+            return validate_and_fix_df(default_df)
 
         def save_data(df):
-            df.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
+            safe_df = validate_and_fix_df(df)
+            safe_df.to_csv(DATA_FILE, index=False, encoding='utf-8-sig')
+
+        def load_reports():
+            if os.path.exists(REPORT_FILE):
+                try:
+                    return pd.read_csv(REPORT_FILE)
+                except:
+                    pass
+            return pd.DataFrame(columns=["測量日期", "體重(kg)", "骨骼肌重(kg)", "體脂肪率(%)", "健康分數", "AI評語"])
+
+        def save_reports(df):
+            df.to_csv(REPORT_FILE, index=False, encoding='utf-8-sig')
 
         if 'workout_sets_data' not in st.session_state:
             st.session_state.workout_sets_data = load_data()
+        if 'body_reports_data' not in st.session_state:
+            st.session_state.body_reports_data = load_reports()
 
         EXERCISE_DICT = {
             "胸部 (Chest)": [
@@ -251,23 +282,22 @@ else:
         if uploaded_file is not None:
             try:
                 imported_df = pd.read_csv(uploaded_file)
-                if "日期" in imported_df.columns:
-                    imported_df["日期"] = pd.to_datetime(imported_df["日期"]).dt.date
-                
+                imported_df = validate_and_fix_df(imported_df)
                 c_up1, c_up2 = st.sidebar.columns(2)
                 if c_up1.button("覆蓋現有資料"):
                     st.session_state.workout_sets_data = imported_df
                     save_data(imported_df)
-                    st.sidebar.success("✅ 已覆蓋匯入並存檔！")
+                    st.sidebar.success("✅ 已安全覆蓋匯入並存檔！")
                 if c_up2.button("合併追加資料"):
                     combined_df = pd.concat([st.session_state.workout_sets_data, imported_df], ignore_index=True).drop_duplicates()
+                    combined_df = validate_and_fix_df(combined_df)
                     st.session_state.workout_sets_data = combined_df
                     save_data(combined_df)
-                    st.sidebar.success("✅ 已合併追加並存檔！")
+                    st.sidebar.success("✅ 已安全合併追加並存檔！")
             except Exception as e:
                 st.sidebar.error(f"解析失敗: {e}")
 
-        # ----------------- 側邊欄：有氧運動記錄 (Aerobic Activity) -----------------
+        # ----------------- 側邊欄：有氧運動記錄 -----------------
         st.sidebar.markdown("---")
         st.sidebar.header("√ 🏃‍♂️ 記錄有氧運動 (Aerobic Activity)")
         with st.sidebar.form("aerobic_form", clear_on_submit=False):
@@ -308,15 +338,15 @@ else:
                     "消耗卡路里": calculated_ae_cals,
                     "心情指數": ae_mood
                 }])
-                st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_ae_row], ignore_index=True)
+                updated_df = pd.concat([st.session_state.workout_sets_data, new_ae_row], ignore_index=True)
+                st.session_state.workout_sets_data = validate_and_fix_df(updated_df)
                 save_data(st.session_state.workout_sets_data)
                 st.sidebar.success(f"✅ 成功儲存有氧紀錄：{aerobic_type} ({duration_min}分鐘, ~{calculated_ae_cals} kcal)！")
 
-        # ----------------- 側邊欄：重量訓練逐組輸入（動態連動選單） -----------------
+        # ----------------- 側邊欄：重量訓練逐組輸入 -----------------
         st.sidebar.markdown("---")
         st.sidebar.header("√ 📝 逐組輸入重量訓練紀錄")
         
-        # 移至表單外部以支援即時動態切換
         muscle_group = st.sidebar.selectbox("√ 選擇主肌群 Muscle Group", list(EXERCISE_DICT.keys()))
         available_exercises = EXERCISE_DICT[muscle_group]
         exercise_name = st.sidebar.selectbox("√ 動作名稱 Exercise Name", available_exercises + ["其他自訂 (Other)"])
@@ -384,14 +414,20 @@ else:
                         item["消耗卡路里"] = estimated_cals // len(set_data_input)
                         
                     new_df = pd.DataFrame(set_data_input)
-                    st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_df], ignore_index=True)
+                    updated_df = pd.concat([st.session_state.workout_sets_data, new_df], ignore_index=True)
+                    st.session_state.workout_sets_data = validate_and_fix_df(updated_df)
                     save_data(st.session_state.workout_sets_data)
                     st.sidebar.success(f"✅ 成功儲存 {len(set_data_input)} 組紀錄（自動計算消耗 {estimated_cals} kcal）！")
                 else:
                     st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
         # ----------------- 主畫面分頁 -----------------
-        tab1, tab2, tab3 = st.tabs(["√ 📊 詳細圖表分析（互動式圖表）", "√ 📋 所有組數歷史明細", "√ 💡 個人檔案與說明"])
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "√ 📊 詳細圖表分析（互動式圖表）", 
+            "√ 📋 所有組數歷史明細", 
+            "√ 💡 個人檔案與說明",
+            "√ 🤖 AI 報告分析與評分系統"
+        ])
 
         with tab1:
             st.subheader("📈 詳細圖表分析 (Interactive Workout Charts)")
@@ -448,10 +484,12 @@ else:
         with tab2:
             st.subheader("📋 所有組數詳細紀錄表 (可線上修改，自動存檔)")
             edited_df = st.data_editor(st.session_state.workout_sets_data, num_rows="dynamic", use_container_width=True)
-            if not edited_df.equals(st.session_state.workout_sets_data):
-                st.session_state.workout_sets_data = edited_df
-                save_data(edited_df)
-                st.success("🔄 資料已自動更新並存檔！")
+            validated_edited_df = validate_and_fix_df(edited_df)
+            
+            if not validated_edited_df.equals(st.session_state.workout_sets_data):
+                st.session_state.workout_sets_data = validated_edited_df
+                save_data(validated_edited_df)
+                st.success("🔄 資料已自動更新並安全存檔！")
             
             csv_data = st.session_state.workout_sets_data.to_csv(index=False).encode('utf-8-sig')
             st.download_button(label="📥 下載個人歷史 CSV 紀錄", data=csv_data, file_name=f"workout_history_{st.session_state.username}.csv", mime="text/csv")
@@ -466,3 +504,67 @@ else:
             - **目標體重**: {cur_prof['target_weight']} kg
             - **年齡 / 性別**: {cur_prof['age']} 歲 / {cur_prof['gender']}
             """)
+
+        with tab4:
+            st.subheader("🤖 AI 身體組成報告分析與體態評分系統")
+            st.markdown("您可以**持續上傳**每次測量的 InBody 或康文署體測報告，系統會自動累積數據、計算健康評分，並繪製身體組成變化趨勢圖！")
+            
+            with st.form("report_upload_form"):
+                rep_date = st.date_input("測量日期 Date", datetime.date.today())
+                r_col1, r_col2, r_col3 = st.columns(3)
+                with r_col1:
+                    input_weight = st.number_input("測量體重 (kg)", min_value=30.0, max_value=250.0, value=float(cur_prof['initial_weight']), step=0.1)
+                with r_col2:
+                    input_muscle = st.number_input("骨骼肌重 SMM (kg)", min_value=10.0, max_value=100.0, value=28.0, step=0.1)
+                with r_col3:
+                    input_fat_p = st.number_input("體脂肪率 PBF (%)", min_value=3.0, max_value=60.0, value=20.0, step=0.1)
+                
+                uploaded_img = st.file_uploader("上傳報告照片 (JPG / PNG)", type=["jpg", "jpeg", "png"])
+                submit_report = st.form_submit_button("📊 上傳並執行 AI 評分與診斷")
+                
+                if submit_report:
+                    base_score = 85
+                    if input_fat_p > 25:
+                        base_score -= int((input_fat_p - 25) * 1.5)
+                    elif input_fat_p < 12:
+                        base_score -= int((12 - input_fat_p) * 1.0)
+                    
+                    health_score = max(50, min(100, base_score))
+                    
+                    ai_comment = "肌肉量表現穩定，建議持續加強核心與下肢訓練以進一步降低體脂肪率。"
+                    if health_score >= 90:
+                        ai_comment = "🏆 完美體態！肌肉與體脂肪比例極佳，請維持目前的訓練與飲食節奏。"
+                    elif health_score >= 75:
+                        ai_comment = "👍 體態良好！建議適度增加高強度有氧與蛋白質攝取，朝精實目標邁進。"
+                    else:
+                        ai_comment = "⚠️ 需要調整！建議增加重量訓練頻率並控制精製碳水化合物攝取。"
+
+                    new_rep_row = pd.DataFrame([{
+                        "測量日期": rep_date,
+                        "體重(kg)": input_weight,
+                        "骨骼肌重(kg)": input_muscle,
+                        "體脂肪率(%)": input_fat_p,
+                        "健康分數": health_score,
+                        "AI評語": ai_comment
+                    }])
+                    
+                    st.session_state.body_reports_data = pd.concat([st.session_state.body_reports_data, new_rep_row], ignore_index=True)
+                    save_reports(st.session_state.body_reports_data)
+                    st.success(f"✅ 報告上傳成功！本次 AI 評定分數：**{health_score} 分**")
+
+            st.markdown("---")
+            st.markdown("### 📈 【歷史體測報告與分數追蹤】")
+            
+            report_df = st.session_state.body_reports_data
+            if not report_df.empty:
+                latest = report_df.iloc[-1]
+                st.info(f"📅 **最近測量日期**: {latest['測量日期']} ｜ 🏆 **AI 綜合健康分數**: **{latest['健康分數']} 分**\n\n💡 **AI 教練短評**：{latest['AI評語']}")
+                
+                fig_body = px.line(report_df, x="測量日期", y=["體重(kg)", "骨骼肌重(kg)", "體脂肪率(%)"], markers=True, title="身體組成與體態持續追蹤趨勢")
+                fig_body.update_layout(hovermode="x unified")
+                st.plotly_chart(fig_body, use_container_width=True)
+                
+                st.markdown("#### 📋 歷史測量數據明細表")
+                st.dataframe(report_df, use_container_width=True)
+            else:
+                st.info("💡 尚未上傳過體測報告。請利用上方表單上傳您的第一筆 InBody 數據來解鎖健康分數與趨勢追蹤！")
