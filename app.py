@@ -290,7 +290,6 @@ else:
             with ae_col2:
                 speed_resist = st.number_input("速度/阻力 (SPEED/RESIST)", min_value=0.0, max_value=100.0, value=10.0, step=0.5)
                 
-            # 自動計算有氧卡路里
             calculated_ae_cals = int(duration_min * 9.5)
             st.info(f"🔥 **自動計算有氧消耗**: ~ {calculated_ae_cals} kcal (依 {duration_min} 分鐘持續時間估算)")
                 
@@ -313,18 +312,20 @@ else:
                 save_data(st.session_state.workout_sets_data)
                 st.sidebar.success(f"✅ 成功儲存有氧紀錄：{aerobic_type} ({duration_min}分鐘, ~{calculated_ae_cals} kcal)！")
 
-        # ----------------- 側邊欄：重量訓練逐組輸入 -----------------
+        # ----------------- 側邊欄：重量訓練逐組輸入（動態連動選單） -----------------
         st.sidebar.markdown("---")
         st.sidebar.header("√ 📝 逐組輸入重量訓練紀錄")
+        
+        # 移至表單外部以支援即時動態切換
+        muscle_group = st.sidebar.selectbox("√ 選擇主肌群 Muscle Group", list(EXERCISE_DICT.keys()))
+        available_exercises = EXERCISE_DICT[muscle_group]
+        exercise_name = st.sidebar.selectbox("√ 動作名稱 Exercise Name", available_exercises + ["其他自訂 (Other)"])
+        
+        if exercise_name == "其他自訂 (Other)":
+            exercise_name = st.sidebar.text_input("請輸入自訂動作名稱", "自訂動作")
+
         with st.sidebar.form("multiset_form", clear_on_submit=False):
             date_val = st.date_input("日期 Date", datetime.date.today())
-            
-            muscle_group = st.selectbox("選擇主肌群 Muscle Group", list(EXERCISE_DICT.keys()))
-            available_exercises = EXERCISE_DICT[muscle_group]
-            exercise_name = st.selectbox("動作名稱 Exercise Name", available_exercises + ["其他自訂 (Other)"])
-            
-            if exercise_name == "其他自訂 (Other)":
-                exercise_name = st.text_input("請輸入自訂動作名稱", "自訂動作")
             
             c_b1, c_b2 = st.columns(2)
             with c_b1:
