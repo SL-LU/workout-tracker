@@ -4,10 +4,11 @@ import datetime
 import os
 import hashlib
 import io
+import re
 import plotly.express as px
 import plotly.graph_objects as go
 
-# 安全匯入 pypdf，避免未安裝時發生 ModuleNotFoundError
+# 安全匯入 pypdf
 try:
     import pypdf
     HAS_PYPDF = True
@@ -514,33 +515,47 @@ else:
             """)
 
         with tab4:
-            st.subheader("🤖 AI 身體組成報告分析與體態評分系統 (支援 PDF / 圖片上傳)")
-            st.markdown("您可以上傳 **PDF 檔案** 或 **圖片 (JPG/PNG)** 的 InBody / 康文署體測報告進行分析與長期追蹤。")
+            st.subheader("🤖 AI 智慧身體組成報告分析與訓練方針")
+            st.markdown("請上傳 **PDF 體測報告**（支援 InBody 或康文署報告），系統將**自動解析報告數值**，並立即產生專業 AI 教練綜合評語、健康評分以及訓練與飲食方向！")
             
-            uploaded_report_file = st.file_uploader("📥 上傳體測報告 (支援 PDF, JPG, PNG)", type=["pdf", "jpg", "jpeg", "png"])
+            uploaded_report_file = st.file_uploader("📥 上傳體測報告 (PDF 或 圖片)", type=["pdf", "jpg", "jpeg", "png"])
             
             extracted_weight = float(cur_prof['initial_weight'])
             extracted_muscle = 28.0
             extracted_fat_p = 20.0
+            auto_detected = False
             
             if uploaded_report_file is not None:
                 file_ext = uploaded_report_file.name.split('.')[-1].lower()
-                if file_ext == 'pdf':
-                    if HAS_PYPDF:
-                        try:
-                            reader = pypdf.PdfReader(io.BytesIO(uploaded_report_file.read()))
-                            pdf_text = ""
-                            for page in reader.pages:
-                                pdf_text += page.extract_text() or ""
-                            st.success("✅ PDF 報告上傳成功！您可以確認下方自動代入的數值。")
-                        except Exception as e:
-                            st.warning(f"⚠️ PDF 解析發生錯誤，請直接手動輸入下方數據：{e}")
-                    else:
-                        st.info("💡 提示：若需自動解析 PDF 內文，建議在您的 `requirements.txt` 檔案中加入 `pypdf`。目前您可以直接手動輸入下方數值進行評分與存檔！")
-                else:
-                    st.image(uploaded_report_file, caption="已上傳的身體組成報告圖片", use_column_width=True)
+                if file_ext == 'pdf' and HAS_PYPDF:
+                    try:
+                        reader = pypdf.PdfReader(io.BytesIO(uploaded_report_file.read()))
+                        pdf_text = ""
+                        for page in reader.pages:
+                            pdf_text += page.extract_text() or ""
+                        
+                        # 智慧正則表達式萃取體重、骨骼肌重、體脂肪率
+                        # 例如萃取類似 "64" 體重 或 "28.7kg" 骨骼肌重
+                        match_w = re.search(r'體重.*?(\d+\.\d+|\d+)', pdf_text)
+                        match_m = re.search(r'骨骼肌重.*?(\d+\.\d+|\d+)', pdf_text)
+                        match_f = re.search(r'體脂肪率.*?(\d+\.\d+|\d+)', pdf_text)
+                        
+                        if match_w:
+                            extracted_weight = float(match_w.group(1))
+                        if match_m:
+                            extracted_muscle = float(match_m.group(1))
+                        if match_f:
+                            extracted_fat_p = float(match_f.group(1))
+                            
+                        auto_detected = True
+                        st.success("🤖 **AI 自動解析成功**：已從 PDF 報告中偵測並代入您的最新體測數據！")
+                    except Exception as e:
+                        st.warning(f"⚠️ PDF 自動解析失敗，請手動確認下方數值：{e}")
+                elif file_ext in ['jpg', 'jpeg', 'png']:
+                    st.image(uploaded_report_file, caption="已上傳的體測報告圖片", use_column_width=True)
 
             with st.form("report_upload_form"):
+                st.markdown("### 📊 報告數值確認與微調")
                 rep_date = st.date_input("測量日期 Date", datetime.date.today())
                 r_col1, r_col2, r_col3 = st.columns(3)
                 with r_col1:
@@ -550,24 +565,28 @@ else:
                 with r_col3:
                     input_fat_p = st.number_input("體脂肪率 PBF (%)", min_value=3.0, max_value=60.0, value=extracted_fat_p, step=0.1)
                 
-                submit_report = st.form_submit_button("📊 確認並執行 AI 評分與診斷存檔")
+                submit_report = st.form_submit_button("🚀 生成 AI 綜合評語與訓練飲食處方")
                 
-                if submit_report:
-                    base_score = 85
-                    if input_fat_p > 25:
-                        base_score -= int((input_fat_p - 25) * 1.5)
+                if submit_report or auto_detected:
+                    # 計算 AI 健康分數 (0-100)
+                    base_score = 88
+                    if input_fat_p > 22:
+                        base_score -= int((input_fat_p - 22) * 2)
                     elif input_fat_p < 12:
-                        base_score -= int((12 - input_fat_p) * 1.0)
+                        base_score -= int((12 - input_fat_p) * 1)
                     
                     health_score = max(50, min(100, base_score))
                     
-                    ai_comment = "肌肉量表現穩定，建議持續加強核心與下肢訓練以進一步降低體脂肪率。"
-                    if health_score >= 90:
-                        ai_comment = "🏆 完美體態！肌肉與體脂肪比例極佳，請維持目前的訓練與飲食節奏。"
+                    # 生成智慧 AI 教練評語與方針
+                    if health_score >= 88:
+                        ai_comment = "🏆 **極佳體態（標準肌肉型）**：您的骨骼肌與體脂肪比例非常優秀，基礎代謝率表現極佳，身體年齡年輕，請持續維持目前的優良習慣！"
+                        ai_training = "• **訓練方向**：維持 3 天重量訓練（著重漸進式超負荷）與 2 天有氧運動，維持肌力與心肺功能。\n• **飲食方向**：維持均衡飲食，每日攝取充足蛋白質（約每公斤體重 1.6g），維持熱量平衡。"
                     elif health_score >= 75:
-                        ai_comment = "👍 體態良好！建議適度增加高強度有氧與蛋白質攝取，朝精實目標邁進。"
+                        ai_comment = "👍 **良好體態**：肌肉量表現穩定，但體脂肪率可再微幅優化，以呈現更精實的肌肉線條。"
+                        ai_training = "• **訓練方向**：增加多關節複合動作（如深蹲、硬舉、臥推），並在重量訓練後穿插 20 分鐘高強度間歇有氧 (HIIT)。\n• **飲食方向**：適度控制精製碳水化合物與含糖飲料，提高蔬菜與優質蛋白質比例。"
                     else:
-                        ai_comment = "⚠️ 需要調整！建議增加重量訓練頻率並控制精製碳水化合物攝取。"
+                        ai_comment = "⚠️ **需要調整**：目前體脂肪率偏高或肌肉量不足，建議透過科學化訓練與飲食控制來進行體態重塑。"
+                        ai_training = "• **訓練方向**：以全身性重量訓練為主（每週 4 天），刺激全身肌肉生長以拉高基礎代謝率。\n• **飲食方向**：實施微幅熱量赤字（減少 200-300 kcal），嚴格控制油脂與糖分攝取。"
 
                     new_rep_row = pd.DataFrame([{
                         "測量日期": rep_date,
@@ -575,26 +594,36 @@ else:
                         "骨骼肌重(kg)": input_muscle,
                         "體脂肪率(%)": input_fat_p,
                         "健康分數": health_score,
-                        "AI評語": ai_comment
+                        "AI評語": f"{ai_comment}\n\n{ai_training}"
                     }])
                     
-                    st.session_state.body_reports_data = pd.concat([st.session_state.body_reports_data, new_rep_row], ignore_index=True)
+                    st.session_state.body_reports_data = pd.concat([st.session_state.body_reports_data, new_rep_row], ignore_index=True).drop_duplicates(subset=["測量日期"], keep="last")
                     save_reports(st.session_state.body_reports_data)
-                    st.success(f"✅ 報告儲存成功！本次 AI 評定分數：**{health_score} 分**")
+                    
+                    st.markdown("---")
+                    st.markdown("### 📋 【🤖 AI 教練體測診斷與處方報告】")
+                    st.success(f"🎉 報告分析完成！本次 AI 綜合健康評分：**{health_score} 分**")
+                    st.info(f"**【AI 綜合評語】**\n\n{ai_comment}")
+                    st.warning(f"**【專屬訓練與飲食處方】**\n\n{ai_training}")
 
             st.markdown("---")
-            st.markdown("### 📈 【歷史體測報告與分數追蹤】")
+            st.markdown("### 📈 【歷史體測報告與分數追蹤 (支援編輯與刪除)】")
             
             report_df = st.session_state.body_reports_data
             if not report_df.empty:
                 latest = report_df.iloc[-1]
-                st.info(f"📅 **最近測量日期**: {latest['測量日期']} ｜ 🏆 **AI 綜合健康分數**: **{latest['健康分數']} 分**\n\n💡 **AI 教練短評**：{latest['AI評語']}")
+                st.markdown(f"📅 **最近測量日期**: {latest['測量日期']} ｜ 🏆 **健康分數**: **{latest['健康分數']} 分**")
                 
                 fig_body = px.line(report_df, x="測量日期", y=["體重(kg)", "骨骼肌重(kg)", "體脂肪率(%)"], markers=True, title="身體組成與體態持續追蹤趨勢")
                 fig_body.update_layout(hovermode="x unified")
                 st.plotly_chart(fig_body, use_container_width=True)
                 
-                st.markdown("#### 📋 歷史測量數據明細表")
-                st.dataframe(report_df, use_container_width=True)
+                st.markdown("#### 📋 歷史測量數據明細表 (可直接點擊表格修改或刪除資料行)")
+                edited_report_df = st.data_editor(report_df, num_rows="dynamic", use_container_width=True, key="body_report_editor_v2")
+                
+                if not edited_report_df.equals(report_df):
+                    st.session_state.body_reports_data = edited_report_df
+                    save_reports(edited_report_df)
+                    st.success("🔄 體測歷史明細已更新並安全存檔！")
             else:
-                st.info("💡 尚未上傳過體測報告。請利用上方表單上傳您的 PDF 或圖片報告來解鎖健康分數與趨勢追蹤！")
+                st.info("💡 尚未上傳過體測報告。請利用上方上傳您的 PDF 報告來自動生成評語與分數追蹤！")
