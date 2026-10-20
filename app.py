@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 # Set page configuration
 st.set_page_config(
-    page_title="專業多組重量訓練追蹤系統 (會員資料與個人檔案版)",
+    page_title="專業多組重量訓練追蹤系統",
     page_icon="🏋️‍♂️",
     layout="wide"
 )
@@ -103,7 +103,6 @@ if not st.session_state.logged_in:
                     users_df = pd.concat([users_df, new_row], ignore_index=True)
                     save_users(users_df)
                     
-                    # 建立空白 profile
                     profiles_df = load_profiles()
                     if new_user not in profiles_df["username"].values:
                         empty_profile = pd.DataFrame([{
@@ -120,12 +119,10 @@ else:
     profiles_df = load_profiles()
     user_prof = profiles_df[profiles_df["username"] == st.session_state.username]
     
-    # 檢查是否完成首次個人資料設定
     is_setup_complete = False
     if not user_prof.empty:
         is_setup_complete = bool(user_prof.iloc[0]["setup_complete"])
 
-    # 如果尚未完成首次設定，強制引導填寫身高、體重等基本資料
     if not is_setup_complete:
         st.title(f"👋 歡迎加入，{st.session_state.name}！")
         st.markdown("### 📋 首次登入設定：請填寫您的基本身體密碼以解鎖專屬健身分析")
@@ -158,7 +155,6 @@ else:
                 st.rerun()
                 
     else:
-        # 頂端導覽列與登出按鈕
         top_col1, top_col2 = st.columns([6, 1])
         with top_col1:
             st.title(f"🏋️‍♂️ 健身紀錄與進度追蹤平台 (歡迎, {st.session_state.name}!)")
@@ -171,7 +167,6 @@ else:
 
         st.markdown("---")
 
-        # 讀取當前用戶個人檔案
         cur_prof = profiles_df[profiles_df["username"] == st.session_state.username].iloc[0]
         st.sidebar.markdown("### 👤 會員檔案卡片")
         st.sidebar.info(
@@ -180,7 +175,6 @@ else:
             f"**目標體重**: {cur_prof['target_weight']} kg"
         )
 
-        # 每個用戶專屬的訓練資料檔案
         DATA_FILE = f"workout_data_{st.session_state.username}.csv"
 
         def load_data():
@@ -257,7 +251,6 @@ else:
             ]
         }
 
-        # 側邊欄 - CSV 匯入與表單
         uploaded_file = st.sidebar.file_uploader("📥 匯入歷史 CSV 紀錄", type=["csv"])
         if uploaded_file is not None:
             try:
@@ -282,10 +275,13 @@ else:
         st.sidebar.header("📝 逐組輸入今日訓練紀錄")
         with st.sidebar.form("multiset_form", clear_on_submit=False):
             date_val = st.date_input("日期 Date", datetime.date.today())
-            muscle_group = st.sidebar.selectbox("選擇主肌群 Muscle Group", list(EXERCISE_DICT.keys()))
+            
+            # 正確順序：先選主肌群，再選動作名稱
+            muscle_group = st.selectbox("選擇主肌群 Muscle Group", list(EXERCISE_DICT.keys()))
             
             available_exercises = EXERCISE_DICT[muscle_group]
             exercise_name = st.selectbox("動作名稱 Exercise Name", available_exercises + ["其他自訂 (Other)"])
+            
             if exercise_name == "其他自訂 (Other)":
                 exercise_name = st.text_input("請輸入自訂動作名稱", "自訂動作")
             
@@ -342,7 +338,6 @@ else:
                 else:
                     st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
-        # 主頁面分頁
         tab1, tab2, tab3 = st.tabs(["📊 詳細圖表分析（互動式圖表）", "📋 所有組數歷史明細", "💡 個人檔案與說明"])
 
         with tab1:
