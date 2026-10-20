@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 # Set page configuration
 st.set_page_config(
-    page_title="專業多組重量訓練追蹤系統",
+    page_title="專業多組重量訓練追蹤系統 (自動卡路里計算版)",
     page_icon="🏋️‍♂️",
     layout="wide"
 )
@@ -224,7 +224,7 @@ else:
             "腿部 (Legs)": [
                 "槓鈴深蹲 (Barbell Squat)", "前蹲舉 (Front Squat)",
                 "保加利亞分腿蹲 (Bulgarian Split Squat)", "腿部推舉機 (Leg Press)",
-                "羅馬尼亞硬舉 (Romanian Deadlift)", "箱式深蹲 (Box Squat)",
+                "羅馬尼亞硬舉 (Romanian Deadlift)", "箱式深蹲 (BoxSquat)",
                 "腿屈伸機 (Leg Extension)", "俯臥腿彎舉 (Leg Curl)",
                 "坐姿提踵 (Seated Calf Raise)", "站姿提踵 (Standing Calf Raise)", "臀橋 / 臀推 (Hip Thrust)"
             ],
@@ -276,9 +276,7 @@ else:
         with st.sidebar.form("multiset_form", clear_on_submit=False):
             date_val = st.date_input("日期 Date", datetime.date.today())
             
-            # 正確順序：先選主肌群，再選動作名稱
             muscle_group = st.selectbox("選擇主肌群 Muscle Group", list(EXERCISE_DICT.keys()))
-            
             available_exercises = EXERCISE_DICT[muscle_group]
             exercise_name = st.selectbox("動作名稱 Exercise Name", available_exercises + ["其他自訂 (Other)"])
             
@@ -289,7 +287,9 @@ else:
             with c_b1:
                 body_weight = st.number_input("當日體重 (kg)", min_value=30.0, max_value=250.0, value=float(cur_prof['initial_weight']), step=0.1)
             with c_b2:
-                cals_burned = st.number_input("每日消耗 (kcal)", min_value=0, max_value=5000, value=200, step=10)
+                # 這裡移除手動輸入，改為動態或保留預設，底下會自動透過組數計算
+                st.markdown("**🔥 卡路里消耗 (Auto)**")
+                st.info("系統將根據下方各組重量與次數自動計算總消耗！")
                 
             mood_val = st.selectbox("心情指數 / 訓練情緒", ["很開心", "開心", "普通", "不開心"])
             
@@ -306,6 +306,8 @@ else:
             ]
             
             set_data_input = []
+            total_volume = 0.0
+            
             for set_name, default_w, default_r in sets_config:
                 cols = st.columns([2, 2, 2])
                 with cols[0]:
@@ -316,6 +318,7 @@ else:
                     r = st.number_input(f"{set_name} 次數", min_value=0, max_value=200, value=default_r, step=1, key=f"r_{set_name}")
                 
                 if w > 0 and r > 0:
+                    total_volume += (w * r)
                     set_data_input.append({
                         "日期": date_val,
                         "肌群分類": muscle_group,
@@ -324,17 +327,25 @@ else:
                         "重量(kg)": w,
                         "次數": r,
                         "體重(kg)": body_weight,
-                        "消耗卡路里": cals_burned,
+                        "消耗卡路里": 0, # 稍後計算
                         "心情指數": mood_val
                     })
-                    
+            
+            # 自動計算卡路里：基礎消耗 (例如 100 kcal) + 總訓練量 (Volume * 0.05)
+            estimated_cals = int(100 + (total_volume * 0.06))
+            st.success(🔥 **預估總訓練量**: `{total_volume:.1f} kg` ｜ **自動計算消耗卡路里**: `~ {estimated_cals} kcal`)
+            
             submitted = st.form_submit_button("➕ 批量儲存所有組數紀錄")
             if submitted:
                 if set_data_input:
+                    # 將計算好的卡路里分攤到該次各組中
+                    for item in set_data_input:
+                        item["消耗卡路里"] = estimated_cals // len(set_data_input)
+                        
                     new_df = pd.DataFrame(set_data_input)
                     st.session_state.workout_sets_data = pd.concat([st.session_state.workout_sets_data, new_df], ignore_index=True)
                     save_data(st.session_state.workout_sets_data)
-                    st.sidebar.success(f"✅ 成功儲存 {len(set_data_input)} 組紀錄並已自動存檔！")
+                    st.sidebar.success(f"✅ 成功儲存 {len(set_data_input)} 組紀錄（自動計算消耗 {estimated_cals} kcal）！")
                 else:
                     st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
