@@ -132,7 +132,6 @@ else:
     if not user_prof.empty:
         is_setup_complete = bool(user_prof.iloc[0]["setup_complete"])
 
-    # 如果是管理員且未設定 profile，直接允許略過或視為完成
     if st.session_state.username == "admin":
         is_setup_complete = True
 
@@ -155,13 +154,20 @@ else:
             if setup_submit:
                 if user_prof.empty:
                     new_p = pd.DataFrame([{
-                        "username": st.session_state.username, "height": set_height, 
-                        "initial_weight": set_init_weight, "target_weight": set_target_weight, 
-                        "age": set_age, "gender": set_gender, "setup_complete": True
+                        "username": st.session_state.username, "height": float(set_height), 
+                        "initial_weight": float(set_init_weight), "target_weight": float(set_target_weight), 
+                        "age": int(set_age), "gender": str(set_gender), "setup_complete": True
                     }])
                     profiles_df = pd.concat([profiles_df, new_p], ignore_index=True)
                 else:
-                    profiles_df.loc[profiles_df["username"] == st.session_state.username, ["height", "initial_weight", "target_weight", "age", "gender", "setup_complete"]] = [set_height, set_init_weight, set_target_weight, set_age, set_gender, True]
+                    # 逐欄位安全賦值，修復 Pandas 型態衝突問題
+                    mask = profiles_df["username"] == st.session_state.username
+                    profiles_df.loc[mask, "height"] = float(set_height)
+                    profiles_df.loc[mask, "initial_weight"] = float(set_init_weight)
+                    profiles_df.loc[mask, "target_weight"] = float(set_target_weight)
+                    profiles_df.loc[mask, "age"] = int(set_age)
+                    profiles_df.loc[mask, "gender"] = str(set_gender)
+                    profiles_df.loc[mask, "setup_complete"] = True
                 
                 save_profiles(profiles_df)
                 st.success("✅ 個人檔案設定完成！")
@@ -181,7 +187,8 @@ else:
         st.markdown("---")
 
         if st.session_state.username != "admin":
-            cur_prof = profiles_df[profiles_df["username"] == st.session_state.username].iloc[0]
+            user_prof = profiles_df[profiles_df["username"] == st.session_state.username]
+            cur_prof = user_prof.iloc[0]
             st.sidebar.markdown("### 👤 會員檔案卡片")
             st.sidebar.info(
                 f"**姓名**: {st.session_state.name}\n\n"
@@ -219,6 +226,7 @@ else:
                     return validate_and_fix_df(df)
                 except:
                     pass
+            init_w = float(user_prof.iloc[0]['initial_weight']) if (st.session_state.username != "admin" and not user_prof.empty) else 70.0
             default_df = pd.DataFrame([
                 {
                     "日期": datetime.date(2026, 10, 10),
@@ -227,7 +235,7 @@ else:
                     "組別": "第一組 (Set 1)",
                     "重量(kg)": 50.0,
                     "次數": 12,
-                    "體重(kg)": float(user_prof.iloc[0]['initial_weight']) if not user_prof.empty else 70.0,
+                    "體重(kg)": init_w,
                     "消耗卡路里": 180,
                     "心情指數": "開心"
                 }
@@ -294,7 +302,6 @@ else:
             ]
         }
 
-        # 非 admin 才顯示一般側邊欄輸入
         if st.session_state.username != "admin":
             uploaded_file = st.sidebar.file_uploader("√ 📥 匯入歷史 CSV 紀錄", type=["csv"])
             if uploaded_file is not None:
@@ -340,6 +347,7 @@ else:
                 
                 ae_submitted = st.form_submit_button("🏃‍♂️ 儲存有氧運動記錄")
                 if ae_submitted:
+                    init_w = float(user_prof.iloc[0]['initial_weight']) if not user_prof.empty else 70.0
                     new_ae_row = pd.DataFrame([{
                         "日期": aerobic_date,
                         "肌群分類": "有氧運動 (Cardio)",
@@ -347,7 +355,7 @@ else:
                         "組別": f"持續 {duration_min}分",
                         "重量(kg)": distance_km,
                         "次數": int(speed_resist * 10),
-                        "體重(kg)": float(user_prof.iloc[0]['initial_weight']),
+                        "體重(kg)": init_w,
                         "消耗卡路里": calculated_ae_cals,
                         "心情指數": ae_mood
                     }])
@@ -368,8 +376,9 @@ else:
             with st.sidebar.form("multiset_form", clear_on_submit=False):
                 date_val = st.date_input("日期 Date", datetime.date.today())
                 c_b1, c_b2 = st.columns(2)
+                init_w = float(user_prof.iloc[0]['initial_weight']) if not user_prof.empty else 70.0
                 with c_b1:
-                    body_weight = st.number_input("當日體重 (kg)", min_value=30.0, max_value=250.0, value=float(user_prof.iloc[0]['initial_weight']), step=0.1)
+                    body_weight = st.number_input("當日體重 (kg)", min_value=30.0, max_value=250.0, value=init_w, step=0.1)
                 with c_b2:
                     st.markdown("**🔥 卡路里消耗 (Auto)**")
                     st.info("系統將根據下方各組重量與次數自動計算！")
@@ -420,9 +429,7 @@ else:
                     else:
                         st.sidebar.warning("⚠️ 請至少填寫一組有效的重量與次數。")
 
-        # ----------------- 主畫面分頁 -----------------
         if st.session_state.username == "admin":
-            # 管理員專屬分頁
             admin_tab1, admin_tab2 = st.tabs(["√ 👥 所有會員名單與檔案管理", "√ 🛡️ 系統總覽與說明"])
             
             with admin_tab1:
@@ -437,7 +444,6 @@ else:
                 edited_members = st.data_editor(merged_df, num_rows="dynamic", use_container_width=True, key="admin_member_editor")
                 
                 if not edited_members.equals(merged_df):
-                    # 拆分並儲存更新
                     new_users_part = edited_members[["username", "password", "name"]]
                     new_profiles_part = edited_members[["username", "height", "initial_weight", "target_weight", "age", "gender", "setup_complete"]]
                     save_users(new_users_part)
@@ -449,10 +455,9 @@ else:
                 st.markdown("""
                 - **會員管理**：您可以在「所有會員名單與檔案管理」分頁中檢視所有註冊用戶的體重、身高與目標設定。
                 - **安全性**：系統採用密碼雜湊加密 (`SHA-256`) 確保會員資料隱私。
-                - **資料隔離**：每位會員的訓練紀錄與 InBody 報告均獨立儲存於專屬檔案中（`workout_data_{username}.csv`）。
+                - **資料隔離**：每位會員的訓練紀錄與 InBody 報告均獨立儲存於專屬檔案中。
                 """)
         else:
-            # 一般會員分頁
             tab1, tab2, tab3, tab4 = st.tabs([
                 "√ 📊 詳細圖表分析（互動式圖表）", 
                 "√ 📋 所有組數歷史明細", 
@@ -526,14 +531,15 @@ else:
                 st.download_button(label="📥 下載個人歷史 CSV 紀錄", data=csv_data, file_name=f"workout_history_{st.session_state.username}.csv", mime="text/csv")
 
             with tab3:
+                curr_prof = user_prof.iloc[0]
                 st.markdown(f"""
                 ### 💡 個人檔案與會員資訊
                 - **會員姓名**: {st.session_state.name}
                 - **會員帳號**: `{st.session_state.username}`
-                - **身高**: {user_prof.iloc[0]['height']} cm
-                - **目前體重**: {user_prof.iloc[0]['initial_weight']} kg
-                - **目標體重**: {user_prof.iloc[0]['target_weight']} kg
-                - **年齡 / 性別**: {user_prof.iloc[0]['age']} 歲 / {user_prof.iloc[0]['gender']}
+                - **身高**: {curr_prof['height']} cm
+                - **目前體重**: {curr_prof['initial_weight']} kg
+                - **目標體重**: {curr_prof['target_weight']} kg
+                - **年齡 / 性別**: {curr_prof['age']} 歲 / {curr_prof['gender']}
                 """)
 
             with tab4:
@@ -542,7 +548,8 @@ else:
                 
                 uploaded_report_file = st.file_uploader("📥 上傳體測報告 (PDF 或 圖片)", type=["pdf", "jpg", "jpeg", "png"])
                 
-                extracted_weight = float(user_prof.iloc[0]['initial_weight'])
+                curr_prof = user_prof.iloc[0]
+                extracted_weight = float(curr_prof['initial_weight'])
                 extracted_muscle = 28.0
                 extracted_fat_p = 20.0
                 auto_detected = False
@@ -601,7 +608,7 @@ else:
                             ai_training = "• **訓練方向**：維持每週 3-4 天重量訓練（著重漸進式超負荷）與 2 天有氧運動，維持肌力與心肺功能。\n• **飲食方向**：維持均衡飲食，每日攝取充足蛋白質（約每公斤體重 1.6g - 1.8g），維持熱量平衡。"
                         elif health_score >= 75:
                             ai_comment = "👍 **良好體態**：肌肉量表現穩定，但體脂肪率可再微幅優化，以呈現更精實的肌肉線條。"
-                            ai_training = "• **訓練方向**：增加多關節複合動作（如深蹲, 硬舉, 臥推），並在重量訓練後穿插 20 分鐘高強度間歇有氧 (HIIT)。\n• **飲食方向**：適度控制精製碳水化合物與含糖飲料，提高蔬菜與優質蛋白質比例。"
+                            ai_training = "• **訓練方向**：增加多關節複合動作（如深蹲、硬舉、臥推），並在重量訓練後穿插 20 分鐘高強度間歇有氧 (HIIT)。\n• **飲食方向**：適度控制精製碳水化合物與含糖飲料，提高蔬菜與優質蛋白質比例。"
                         else:
                             ai_comment = "⚠️ **需要調整**：目前體脂肪率偏高或肌肉量不足，建議透過科學化訓練與飲食控制來進行體態重塑。"
                             ai_training = "• **訓練方向**：以全身性重量訓練為主（每週 4 天），刺激全身肌肉生長以拉高基礎代謝率。\n• **飲食方向**：實施微幅熱量赤字（減少 200-300 kcal），嚴格控制油脂與糖分攝取。"
