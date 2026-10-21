@@ -515,8 +515,8 @@ else:
             """)
 
         with tab4:
-            st.subheader("🤖 AI 智慧身體組成報告分析與訓練方針")
-            st.markdown("請上傳 **PDF 體測報告**（支援 InBody 或康文署報告），系統將**自動解析報告數值**，並立即產生專業 AI 教練綜合評語、健康評分以及訓練與飲食方向！")
+            st.subheader("🤖 AI 智慧身體組成報告分析與詳細處方")
+            st.markdown("請上傳 **PDF 體測報告**（支援 InBody 或康文署報告），系統將自動解析數值，並立即產出**詳細身體報告、AI 綜合評語以及具體的訓練與飲食方向**！")
             
             uploaded_report_file = st.file_uploader("📥 上傳體測報告 (PDF 或 圖片)", type=["pdf", "jpg", "jpeg", "png"])
             
@@ -534,8 +534,6 @@ else:
                         for page in reader.pages:
                             pdf_text += page.extract_text() or ""
                         
-                        # 智慧正則表達式萃取體重、骨骼肌重、體脂肪率
-                        # 例如萃取類似 "64" 體重 或 "28.7kg" 骨骼肌重
                         match_w = re.search(r'體重.*?(\d+\.\d+|\d+)', pdf_text)
                         match_m = re.search(r'骨骼肌重.*?(\d+\.\d+|\d+)', pdf_text)
                         match_f = re.search(r'體脂肪率.*?(\d+\.\d+|\d+)', pdf_text)
@@ -565,10 +563,9 @@ else:
                 with r_col3:
                     input_fat_p = st.number_input("體脂肪率 PBF (%)", min_value=3.0, max_value=60.0, value=extracted_fat_p, step=0.1)
                 
-                submit_report = st.form_submit_button("🚀 生成 AI 綜合評語與訓練飲食處方")
+                submit_report = st.form_submit_button("🚀 生成詳細報告與 AI 綜合處方")
                 
                 if submit_report or auto_detected:
-                    # 計算 AI 健康分數 (0-100)
                     base_score = 88
                     if input_fat_p > 22:
                         base_score -= int((input_fat_p - 22) * 2)
@@ -577,10 +574,10 @@ else:
                     
                     health_score = max(50, min(100, base_score))
                     
-                    # 生成智慧 AI 教練評語與方針
+                    # 詳細 AI 評語與處方
                     if health_score >= 88:
                         ai_comment = "🏆 **極佳體態（標準肌肉型）**：您的骨骼肌與體脂肪比例非常優秀，基礎代謝率表現極佳，身體年齡年輕，請持續維持目前的優良習慣！"
-                        ai_training = "• **訓練方向**：維持 3 天重量訓練（著重漸進式超負荷）與 2 天有氧運動，維持肌力與心肺功能。\n• **飲食方向**：維持均衡飲食，每日攝取充足蛋白質（約每公斤體重 1.6g），維持熱量平衡。"
+                        ai_training = "• **訓練方向**：維持每週 3-4 天重量訓練（著重漸進式超負荷）與 2 天有氧運動，維持肌力與心肺功能。\n• **飲食方向**：維持均衡飲食，每日攝取充足蛋白質（約每公斤體重 1.6g - 1.8g），維持熱量平衡。"
                     elif health_score >= 75:
                         ai_comment = "👍 **良好體態**：肌肉量表現穩定，但體脂肪率可再微幅優化，以呈現更精實的肌肉線條。"
                         ai_training = "• **訓練方向**：增加多關節複合動作（如深蹲、硬舉、臥推），並在重量訓練後穿插 20 分鐘高強度間歇有氧 (HIIT)。\n• **飲食方向**：適度控制精製碳水化合物與含糖飲料，提高蔬菜與優質蛋白質比例。"
@@ -601,10 +598,10 @@ else:
                     save_reports(st.session_state.body_reports_data)
                     
                     st.markdown("---")
-                    st.markdown("### 📋 【🤖 AI 教練體測診斷與處方報告】")
+                    st.markdown("### 📋 【🤖 AI 教練詳細報告與處方】")
                     st.success(f"🎉 報告分析完成！本次 AI 綜合健康評分：**{health_score} 分**")
                     st.info(f"**【AI 綜合評語】**\n\n{ai_comment}")
-                    st.warning(f"**【專屬訓練與飲食處方】**\n\n{ai_training}")
+                    st.warning(f"**【詳細訓練與飲食方向】**\n\n{ai_training}")
 
             st.markdown("---")
             st.markdown("### 📈 【歷史體測報告與分數追蹤 (支援編輯與刪除)】")
@@ -619,11 +616,11 @@ else:
                 st.plotly_chart(fig_body, use_container_width=True)
                 
                 st.markdown("#### 📋 歷史測量數據明細表 (可直接點擊表格修改或刪除資料行)")
-                edited_report_df = st.data_editor(report_df, num_rows="dynamic", use_container_width=True, key="body_report_editor_v2")
+                edited_report_df = st.data_editor(report_df, num_rows="dynamic", use_container_width=True, key="body_report_editor_v3")
                 
                 if not edited_report_df.equals(report_df):
                     st.session_state.body_reports_data = edited_report_df
                     save_reports(edited_report_df)
                     st.success("🔄 體測歷史明細已更新並安全存檔！")
             else:
-                st.info("💡 尚未上傳過體測報告。請利用上方上傳您的 PDF 報告來自動生成評語與分數追蹤！")
+                st.info("💡 尚未上傳過體測報告。請利用上方上傳您的 PDF 報告來自動生成詳細報告與處方！")
